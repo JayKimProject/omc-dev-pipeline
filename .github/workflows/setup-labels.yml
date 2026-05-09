@@ -1,0 +1,30 @@
+name: Setup Labels
+
+on:
+  workflow_dispatch:
+  # Also run once when the repo is first set up
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/setup-labels.yml"
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Create agent-task label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create "agent-task" \
+            --description "Triggers the Developer Agent to implement this issue" \
+            --color "0075ca" \
+            --repo ${{ github.repository }} 2>/dev/null \
+          || gh label edit "agent-task" \
+            --description "Triggers the Developer Agent to implement this issue" \
+            --color "0075ca" \
+            --repo ${{ github.repository }}
+          echo "✅ Label 'agent-task' is ready"

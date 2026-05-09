@@ -4,24 +4,41 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number to review"
+        required: true
+        type: number
+
+concurrency:
+  group: reviewer-pr-${{ github.event.pull_request.number || inputs.pr_number }}
+  cancel-in-progress: true
 
 jobs:
   review:
-    # Only review PRs from agent/ branches
-    if: startsWith(github.head_ref, 'agent/')
+    # For pull_request events: only review agent/ branches
+    # For workflow_dispatch: always run
+    if: startsWith(github.head_ref, 'agent/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     permissions:
       contents: write        # merge PR
-      pull-requests: write   # post review comment, merge
+      pull-requests: write   # post review comment
       issues: read
 
     steps:
+      - name: Resolve PR number
+        id: pr
+        run: |
+          echo "number=${{ github.event.pull_request.number || inputs.pr_number }}" >> $GITHUB_OUTPUT
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
-          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GH_PAT }}
+          # Check out the PR branch so read_file works on the changed files
+          ref: ${{ github.head_ref || 'main' }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,7 +51,7 @@ jobs:
       - name: Run Reviewer Agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           GH_BIN: gh
         run: |
-          python agents/reviewer.py --pr ${{ github.event.pull_request.number }}
+          python agents/reviewer.py --pr ${{ steps.pr.outputs.number }}
